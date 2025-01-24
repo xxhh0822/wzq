@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>五子棋</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-ui/lib/theme-chalk/index.css">
+    <script src="https://unpkg.com/vue@2/dist/vue.js"></script>
+    <script src="https://unpkg.com/element-ui/lib/index.js"></script>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            margin: 0;
+            padding: 20px;  /* 添加内边距防止贴边 */
+            box-sizing: border-box;
+        }
+        #app {
+            width: 100%;
+            max-width: 800px;  /* 最大宽度 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        .board-container {
+            position: relative;
+            width: 100%;
+            max-width: min(800px, 90vmin);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .board {
+            width: 100%;
+            max-width: min(800px, 90vmin);
+            aspect-ratio: 1 / 1;
+            display: grid;
+            grid-template-columns: repeat(15, 1fr);
+            grid-template-rows: repeat(15, 1fr);
+            position: relative;
+            background-color: #f0d1b1;
+            border: 1px solid #333;
+            box-sizing: border-box;
+            padding: 2.5%;
+            overflow: visible;  /* 确保可以看到溢出内容 */
+        }
+        .cell {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+            box-sizing: border-box;
+            grid-column: span 1;
+            grid-row: span 1;
+        }
+        .cell::before,
+        .cell::after {
+            content: '';
+            position: absolute;
+            background-color: #333;
+            transform-origin: center;
+        }
+        .cell::before {
+            top: 50%;
+            left: 0;
+            width: 100%;
+            transform: scaleY(1.2);  /* 减小横线的缩放比例 */
+            height: 1px;
+        }
+        .cell::after {
+            left: 50%;
+            top: 0;
+            height: 100%;
+            transform: scaleX(1.2);  /* 减小竖线的缩放比例 */
+            width: 1px;
+        }
+
+        /* 第一列的特殊处理 */
+        .cell:nth-child(15n+1)::before {
+            left: 50%;
+            width: 50%;
+        }
+
+        /* 最后一列的特殊处理 */
+        .cell:nth-child(15n)::before {
+            width: 50%;
+        }
+
+        /* 第一行的特殊处理 */
+        .cell:nth-child(-n+15)::after {
+            top: 50%;
+            height: 50%;
+        }
+
+        /* 最后一行的特殊处理 */
+        .cell:nth-child(n+211)::after {
+            height: 50%;
+        }
+
+        /* 左上角 */
+        .cell:first-child::before {
+            left: 50%;
+            width: 50%;
+        }
+        .cell:first-child::after {
+            top: 50%;
+            height: 50%;
+        }
+
+        /* 右上角 */
+        .cell:nth-child(15)::before {
+            width: 50%;
+        }
+        .cell:nth-child(15)::after {
+            top: 50%;
+            height: 50%;
+        }
+
+        /* 左下角 */
+        .cell:nth-child(211)::before {
+            left: 50%;
+            width: 50%;
+        }
+        .cell:nth-child(211)::after {
+            height: 50%;
+        }
+
+        /* 右下角 */
+        .cell:last-child::before {
+            width: 50%;
+        }
+        .cell:last-child::after {
+            height: 50%;
+        }
+        .intersection {
+            position: absolute;
+            width: calc(min(800px, 90vmin) / 15 * 0.8);
+            height: calc(min(800px, 90vmin) / 15 * 0.8);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 8;
+            transition: all 0.3s ease;  /* 添加过渡效果 */
+        }
+        .intersection.winning {
+            box-shadow: 0 0 10px #ff0, 0 0 20px #ff0, 0 0 30px #ff0;  /* 增强光晕效果 */
+            transform: translate(-50%, -50%) scale(1.1);
+            z-index: 11;  /* 确保获胜棋子显示在最上层 */
+        }
+        .black {
+            background-color: black;
+        }
+        .white {
+            background-color: white;
+            border: 1px solid black;
+        }
+        .controls {
+            position: absolute;
+            bottom: -37px;  /* -32px - 5px 间距 */
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            white-space: nowrap;
+            z-index: 100;
+        }
+        .current-turn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 4px 10px;
+            height: 32px;
+            font-size: calc(min(800px, 90vmin) / 45);
+            box-sizing: border-box;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            color: #606266;
+        }
+        .turn-piece {
+            width: calc(min(800px, 90vmin) / 40);
+            height: calc(min(800px, 90vmin) / 40);
+            border-radius: 50%;
+            display: inline-block;
+            vertical-align: middle;
+            margin-top: -1px;
+        }
+        .undo-button {
+            display: inline-flex !important;
+            align-items: center !important;
+            line-height: 1 !important;
+            height: 32px;
+            font-size: calc(min(800px, 90vmin) / 45);
+        }
+        .undo-button span.turn-piece {
+            margin-left: 5px;
+        }
+        .winner-alert {
+            position: absolute;
+            top: 10%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 8px 16px;  /* 更小的内边距 */
+            border-radius: 4px;  /* 更小的圆角 */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 10;
+            font-size: calc(min(800px, 90vmin) / 40);  /* 更小的字体 */
+            text-align: center;
+            border: 1px solid #409EFF;  /* 更细的边框 */
+            min-width: 100px;  /* 更小的最小宽度 */
+            pointer-events: auto;
+            margin: 0;
+            box-sizing: border-box;
+            backdrop-filter: blur(2px);
+        }
+        .winner-alert.black {
+            color: black;
+        }
+        .winner-alert.white {
+            color: #333;
+        }
+        .winner-content {
+            margin-bottom: 6px;  /* 更小的底部间距 */
+            font-weight: bold;
+        }
+        /* 更小的按钮 */
+        .winner-alert .el-button--small {
+            padding: 4px 10px;  /* 更小的按钮内边距 */
+            font-size: calc(min(800px, 90vmin) / 45);  /* 更小的按钮字体 */
+            min-height: 24px;  /* 更小的按钮高度 */
+        }
+        .overlay-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 9;
+        }
+        .board-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(255, 255, 255, 0.2);  /* 降低遮罩不透明度到0.2 */
+            z-index: 9;
+            pointer-events: none;
+        }
+        .board > * {
+            position: absolute;
+            pointer-events: none;  /* 移除这个限制 */
+        }
+        .board .cell {
+            position: relative;
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="board-container">
+        <div class="board">
+            <div class="cell" v-for="(cell, index) in cells" :key="index" @click="handleCellClick(index)">
+                <div v-if="cell === 'black'" 
+                    class="intersection black" 
+                    :class="{ winning: winningPieces.includes(index) }"
+                    :style="{ 
+                        top: getIntersectionPosition(index).top,
+                        left: getIntersectionPosition(index).left 
+                    }">
+                </div>
+                <div v-if="cell === 'white'" 
+                    class="intersection white" 
+                    :class="{ winning: winningPieces.includes(index) }"
+                    :style="{ 
+                        top: getIntersectionPosition(index).top,
+                        left: getIntersectionPosition(index).left 
+                    }">
+                </div>
+            </div>
+        </div>
+        <div class="controls">
+            <div class="current-turn">
+                轮到：<span class="turn-piece" :class="currentPlayer"></span>
+            </div>
+            <el-button 
+                class="undo-button"
+                type="default"
+                size="small"
+                @click="undoMove"
+                :disabled="!previousMoves.length">
+                悔棋：<span class="turn-piece" :class="currentPlayer === 'black' ? 'white' : 'black'"></span>
+            </el-button>
+        </div>
+        <div class="overlay-container">
+            <div v-if="winner" class="board-overlay"></div>
+            <div v-if="winner" :class="['winner-alert', winner]">
+                <div class="winner-content">
+                    {{ winner === 'black' ? '黑棋胜利' : '白棋胜利' }}
+                </div>
+                <el-button size="small" type="primary" @click="resetGame">开始新游戏</el-button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    new Vue({
+        el: '#app',
+        data() {
+            return {
+                cells: Array(225).fill(null),
+                currentPlayer: 'black',
+                winner: null,
+                previousMoves: [],
+                winningPieces: [],
+            };
+        },
+        methods: {
+            getIntersectionPosition(index) {
+                const row = Math.floor(index / 15);
+                const col = index % 15;
+                return {
+                    top: '50%',
+                    left: '50%'
+                };
+            },
+            handleCellClick(index) {
+                if (this.cells[index]) return;
+                this.$set(this.cells, index, this.currentPlayer);
+                this.previousMoves.push(index);
+                if (this.checkWin(index)) {
+                    this.winner = this.currentPlayer;
+                }
+                this.currentPlayer = this.currentPlayer === 'black' ? 'white' : 'black';
+            },
+            checkWin(index) {
+                const row = Math.floor(index / 15);
+                const col = index % 15;
+                const directions = [
+                    [1, 0],   // 水平
+                    [0, 1],   // 垂直
+                    [1, 1],   // 对角线
+                    [1, -1]   // 反对角线
+                ];
+                
+                for (const [dx, dy] of directions) {
+                    let count = 1;
+                    let pieces = [index];  // 记录当前方向的棋子位置
+                    
+                    // 正向检查
+                    let x = row + dx;
+                    let y = col + dy;
+                    while (x >= 0 && x < 15 && y >= 0 && y < 15 && this.cells[x * 15 + y] === this.currentPlayer) {
+                        count++;
+                        pieces.push(x * 15 + y);
+                        x += dx;
+                        y += dy;
+                    }
+                    
+                    // 反向检查
+                    x = row - dx;
+                    y = col - dy;
+                    while (x >= 0 && x < 15 && y >= 0 && y < 15 && this.cells[x * 15 + y] === this.currentPlayer) {
+                        count++;
+                        pieces.push(x * 15 + y);
+                        x -= dx;
+                        y -= dy;
+                    }
+                    
+                    if (count >= 5) {
+                        this.winningPieces = pieces;  // 保存获胜棋子位置
+                        return true;
+                    }
+                }
+                return false;
+            },
+            undoMove() {
+                if (this.previousMoves.length === 0) return;
+                
+                const lastMove = this.previousMoves.pop();
+                this.$set(this.cells, lastMove, null);
+                
+                if (this.winner) {
+                    this.winner = null;
+                    this.winningPieces = [];
+                }
+                
+                this.currentPlayer = this.currentPlayer === 'black' ? 'white' : 'black';
+            },
+            resetGame() {
+                this.cells = Array(225).fill(null);
+                this.winner = null;
+                this.currentPlayer = 'black';
+                this.previousMoves = [];
+                this.winningPieces = [];
+            }
+        }
+    });
+</script>
+</body>
+</html>
